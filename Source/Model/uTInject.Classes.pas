@@ -31,6 +31,12 @@
   Modificação..: Adicionadas correcoes para trabalhar com lid
 
 ####################################################################################################################
+  Autor........: Jonathan First
+  Email........: jonathan@kayser.com.br / ojonathanfirst@gmail.com
+  Data.........: 01/04/2025
+  Identificador:
+  Modificação..: Adicionado classe para pegar o selectedRowId da lista de opções do sendButtonList
+####################################################################################################################
 }
 
 unit uTInject.Classes;
@@ -56,6 +62,8 @@ type
   TQrCodeRets  = set of TQrCodeRet;
   TChatClass   = class;   //forward
   TSenderClass = class;   //forward
+  TListResponse = class;
+  TSingleSelectReply = class;
   TTypeNumber  = (TypUndefined=0, TypContact=1, TypGroup=2, TypList=3);
   TFormaUpdate = (Tup_Local=0, Tup_Web=1);
 
@@ -617,6 +625,7 @@ type
     FIsForwarded        :Boolean;
     FLabels             :TArray<String>;
     FSender             :TSenderClass;
+    FListResponse       :TListResponse;
     FTimestamp          :Extended;
     FContent            :String;
     FIsGroupMsg         :Boolean;
@@ -632,6 +641,7 @@ type
     FprofilePicThumb    :string;
     FselectedId         :string;
     FselectedButtonId   :string; //in iphone
+    FselectedRowId      :string;
   public
     constructor Create(pAJsonString: string);
     destructor  Destroy;       override;
@@ -678,6 +688,7 @@ type
     property pageCount         :Extended      read FpageCount          Write FpageCount;
     property quotedMsgObj      :String        read FquotedMsgObj       Write FquotedMsgObj;
     property sender            :TSenderClass  read FSender             write FSender;
+    property listResponse      :TListResponse read FListResponse       write FListResponse;
     property star              :Boolean       read FStar               write FStar;
     property t                 :Extended      read FT                  write FT;
     property timestamp         :Extended      read FTimestamp          write FTimestamp;
@@ -685,6 +696,7 @@ type
     property profilePicThumb   :String        read FprofilePicThumb    write FprofilePicThumb;
     property selectedId        :String        read FselectedId         write FselectedId;
     property selectedButtonId  :String        read FselectedButtonId   write FselectedButtonId;
+    property selectedRowId     :String        read FselectedRowId      write FselectedRowId;
   end;
 
   TChatClass = class(TClassPadraoList<TMessagesClass>)
@@ -867,6 +879,28 @@ public
   property profilePicThumb: String         read FProfilePicThumb  write FProfilePicThumb;  //@mikelustosa
 end;
 
+TSingleSelectReply = class(TClassPadrao)
+private
+  FselectedRowId : String;
+public
+  constructor Create(pAJsonString: string);
+  property SelectedRowId : String read FselectedRowId write FselectedRowId;
+  function getSelectedRowId: String;
+end;
+
+TListResponse = class(TClassPadrao)
+private
+  FTitle : String;
+  FDescription: String;
+  FSingleSelectReply: TSingleSelectReply;
+public
+  destructor Destroy; override;
+  constructor Create(pAJsonString: string);
+
+  property Title: String read FTitle write FTitle;
+  property Description: String read FDescription write FDescription;
+  property SingleSelectReply: TSingleSelectReply read FSingleSelectReply write FSingleSelectReply;
+end;
 
 Procedure LogAdd(Pvalor:WideString; PCab:String = '');
 Procedure ClearLastQrcodeCtr;
@@ -921,7 +955,6 @@ Begin
 
   end;
 End;
-
 
   {TResultQRCodeClass}
 function TResultQRCodeClass.AQrCodeQuestion: Boolean;
@@ -1109,6 +1142,7 @@ begin
   FSender    := TSenderClass.Create   (JsonString);
   FChat      := TChatClass.Create     (JsonString);
   FMediaData := TMediaDataClass.Create(JsonString);
+  FListResponse := TListResponse.Create(JsonString);
   inherited Create(pAJsonString);
 end;
 
@@ -1117,6 +1151,7 @@ begin
   FreeAndNil(FSender);//.free;
   FreeAndNil(FChat);//.free;
   FreeAndNil(FMediaData);//.free;
+  FreeAndNil(FListResponse);
   inherited;
 end;
 
@@ -1165,7 +1200,6 @@ end;
 destructor TQrCodeClass.Destroy;
 begin
   FreeandNil(FResult);
-
   inherited;
 end;
 
@@ -1181,17 +1215,14 @@ var
     resultArray: TJSONArray;
   begin
     Result := False;
-
     jsonObject := TJSONObject.ParseJSONValue(jsonString) as TJSONObject;
 
     try
-
       if Assigned(jsonObject) and jsonObject.TryGetValue<TJSONValue>('result', resultValue) then
-      begin
-
-        if Assigned(resultValue) and (resultValue is TJSONArray) then
-          Result := True;
-      end;
+        begin
+          if Assigned(resultValue) and (resultValue is TJSONArray) then
+            Result := True;
+        end;
     finally
       jsonObject.Free;
     end;
@@ -1217,7 +1248,6 @@ begin
       _className := _className;
     end;
 
-
     if IsResultArray(pAJsonString) and (_className <> 'getAllContacts') then
       RemoveObjectsFromJson(TJSONObject(lAJsonObj));
     {$ENDIF}
@@ -1228,7 +1258,6 @@ begin
     except
       _className := _className;
     end;
-
 
     if IsResultArray(pAJsonString) and (_className <> 'getAllContacts') then
       RemoveObjectsFromJson(TJSONObject(lAJsonObj));
@@ -1253,7 +1282,6 @@ begin
     FreeAndNil(lAJsonObj);
   end;
 end;
-
 
 procedure TClassPadrao.RemoveObjectsFromJson(var json: TJSONObject);
 var
@@ -1632,7 +1660,6 @@ begin
   FNumbers.Text := StringReplace(FNumbers.Text, '[' , '',    [rfReplaceAll]);
   FNumbers.Text := StringReplace(FNumbers.Text, ']' , '',    [rfReplaceAll]);
   FNumbers.Text := StringReplace(FNumbers.Text, '}' , '',    [rfReplaceAll]);
-
 end;
 
 destructor TRetornoAllGroupAdmins.Destroy;
@@ -1724,6 +1751,31 @@ begin
  inherited Create(pAJsonString);
 end;
 
+{ TListResponse }
+
+constructor TListResponse.Create(pAJsonString: string);
+begin
+  FSingleSelectReply := TSingleSelectReply.Create(JsonString);
+  inherited Create(pAJsonString);
+end;
+
+destructor TListResponse.Destroy;
+begin
+  FreeAndNil(FSingleSelectReply);
+  inherited;
+end;
+
+{ TSingleSelectReply }
+
+constructor TSingleSelectReply.Create(pAJsonString: string);
+begin
+  inherited Create(pAJsonString);
+end;
+
+function TSingleSelectReply.getSelectedRowId: String;
+begin
+  Result:= Self.SelectedRowId;
+end;
 { TGetLidClass }
 
 constructor TGetLidClass.Create(pAJsonString: string;
